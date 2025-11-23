@@ -9,6 +9,8 @@ const AppleHealthProcessor = require('./processors/appleHealthProcessor');
 const CoachMeProcessor = require('./processors/coachMeProcessor');
 const SleepProcessor = require('./processors/sleepProcessor');
 const ManualHealthProcessor = require('./processors/manualHealthProcessor');
+const DatabaseConnection = require('./database/connection');
+const DataMapper = require('./database/dataMapper');
 
 const program = new Command();
 
@@ -37,8 +39,20 @@ async function processDataSource(name, processor, getFiles, outputPath, options)
       if (files.length > 5) console.log(`... and ${files.length - 5} more`);
       return null;
     }
+
+    // Initialize database if requested
+    if (options.database) {
+      const dbPath = options.database === true ? options.dbPath : options.database;
+      await processor.initializeDatabase(dbPath);
+    }
     
     const result = await processor.processFiles(files, options.incremental);
+    
+    // Save to database if enabled
+    if (options.database && result.records.length > 0) {
+      const dbResult = await processor.saveToDatabase();
+      result.databaseResult = dbResult;
+    }
     
     // Group records by data type for separate output files
     const recordsByType = {};
@@ -57,11 +71,21 @@ async function processDataSource(name, processor, getFiles, outputPath, options)
     
     console.log(`✅ ${name}: ${result.processed} records processed, ${result.errors} errors`);
     
+    // Show database results if applicable
+    if (result.databaseResult) {
+      console.log(`💾 Database: ${result.databaseResult.inserted} records saved, ${result.databaseResult.errors} errors`);
+    }
+    
     // Show statistics
     const stats = processor.getStats();
     console.log(`📈 Success rate: ${(stats.successRate * 100).toFixed(1)}%`);
     if (stats.dateRange) {
       console.log(`📅 Date range: ${stats.dateRange.earliest} to ${stats.dateRange.latest}`);
+    }
+
+    // Close database connection
+    if (options.database) {
+      processor.closeDabase();
     }
     
     return result;
@@ -84,6 +108,8 @@ program
   .option('-t, --type <type>', 'Specific data type to process (gyroscope, nike, apple, etc.)')
   .option('-i, --incremental', 'Process only changed files', false)
   .option('--dry-run', 'Show what would be processed without actually processing', false)
+  .option('-d, --database [path]', 'Save to database (optional path)', false)
+  .option('--db-path <path>', 'Database file path', './data/health_data.db')
   .action(async (options) => {
     try {
       const sourcePath = path.resolve(options.source.replace('~', require('os').homedir()));
@@ -94,6 +120,7 @@ program
       console.log(`Output: ${outputPath}`);
       console.log(`Incremental: ${options.incremental}`);
       console.log(`Type filter: ${options.type || 'all'}`);
+      console.log(`Database: ${options.database ? (options.database === true ? options.dbPath : options.database) : 'disabled'}`);
       
       // Ensure output directory exists
       await fs.ensureDir(outputPath);
@@ -253,6 +280,155 @@ program
         const match = file.match(/gyroscope-\w+-(\w+)-export\.csv/);
         if (match) console.log(`  - ${match[1]}`);
       });
+    }
+  });
+
+program
+  .command('database')
+  .description('Database operations')
+  .option('--db-path <path>', 'Database file path', './data/health_data.db')
+  .option('--create', 'Create database and tables', false)
+  .option('--stats', 'Show database statistics', false)
+  .option('--reset', 'Reset database (delete all data)', false)
+  .option('--vacuum', 'Vacuum database to reclaim space', false)
+  .action(async (options) => {
+    try {
+      const dbPath = path.resolve(options.dbPath);
+      
+      console.log('🗄️  Database Operations');
+      console.log(`Database: ${dbPath}`);
+      
+      const db = new DatabaseConnection(dbPath);
+      
+      if (options.create) {
+        console.log('\n📊 Creating database...');
+        await db.connect();
+        await db.createTables();
+        console.log('✅ Database created successfully');
+        db.close();
+      }
+      
+      if (options.reset) {
+        console.log('\n⚠️  Resetting database...');
+        await db.connect();
+        await db.dropAllTables();
+        await db.createTables();
+        console.log('✅ Database reset complete');
+        db.close();
+      }
+      
+      if (options.vacuum) {
+        console.log('\n🧹 Vacuuming database...');
+        await db.connect();
+        db.vacuum();
+        db.close();
+      }
+      
+      if (options.stats) {
+        console.log('\n📊 Database Statistics:');
+        await db.connect();
+        
+        const exists = await db.databaseExists();
+        if (!exists) {
+          console.log('❌ Database does not exist or has no tables');
+          db.close();
+          return;
+        }
+        
+        const stats = await db.getStats();
+        const fileSize = await db.getFileSize();
+        
+        console.log(`Total Records: ${stats.totalRecords.toLocaleString()}`);
+        console.log(`Database Size: ${fileSize}`);
+        
+        if (stats.dateRange) {
+          console.log(`Date Range: ${stats.dateRange.earliest} to ${stats.dateRange.latest}`);
+        }
+        
+        console.log('\n📈 Records by Source:');
+        Object.entries(stats.recordsBySource).forEach(([source, count]) => {
+          console.log(`  ${source}: ${count.toLocaleString()}`);
+        });
+        
+        console.log('\n📊 Records by Data Type:');
+        Object.entries(stats.recordsByType).forEach(([type, count]) => {
+          console.log(`  ${type}: ${count.toLocaleString()}`);
+        });
+        
+        console.log('\n🗂️  Table Counts:');
+        Object.entries(stats.tableCounts).forEach(([table, count]) => {
+          if (count > 0) {
+            console.log(`  ${table}: ${count.toLocaleString()}`);
+          }
+        });
+        
+        db.close();
+      }
+      
+    } catch (error) {
+      console.error('❌ Database operation failed:', error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('query')
+  .description('Query database for records')
+  .option('--db-path <path>', 'Database file path', './data/health_data.db')
+  .option('--start-date <date>', 'Start date (MM/DD/YYYY)')
+  .option('--end-date <date>', 'End date (MM/DD/YYYY)')
+  .option('--source <source>', 'Filter by data source')
+  .option('--type <type>', 'Filter by data type')
+  .option('--limit <number>', 'Limit number of results', '100')
+  .action(async (options) => {
+    try {
+      const dbPath = path.resolve(options.dbPath);
+      console.log('🔍 Querying Database');
+      console.log(`Database: ${dbPath}`);
+      
+      const db = new DatabaseConnection(dbPath);
+      await db.connect();
+      
+      const exists = await db.databaseExists();
+      if (!exists) {
+        console.log('❌ Database does not exist');
+        db.close();
+        return;
+      }
+      
+      let query = 'SELECT * FROM health_records WHERE 1=1';
+      const params = [];
+      
+      if (options.startDate && options.endDate) {
+        query += ' AND date_only BETWEEN ? AND ?';
+        params.push(options.startDate, options.endDate);
+      }
+      
+      if (options.source) {
+        query += ' AND source = ?';
+        params.push(options.source);
+      }
+      
+      if (options.type) {
+        query += ' AND data_type = ?';
+        params.push(options.type);
+      }
+      
+      query += ' ORDER BY timestamp DESC LIMIT ?';
+      params.push(parseInt(options.limit));
+      
+      const records = db.query(query, params);
+      
+      console.log(`\n📋 Found ${records.length} records:`);
+      records.forEach(record => {
+        console.log(`${record.timestamp} | ${record.source} | ${record.data_type} | ${record.sub_type || 'N/A'}`);
+      });
+      
+      db.close();
+      
+    } catch (error) {
+      console.error('❌ Query failed:', error.message);
+      process.exit(1);
     }
   });
 

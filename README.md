@@ -23,9 +23,10 @@ A high-performance, modular data processing pipeline for normalizing health, fit
 - **Configuration Driven**: JSON-based configuration for all settings
 
 ### 🎯 **Database Ready**
-- **Consistent Structure**: Each record includes ID, timestamp, source metadata
-- **Atomic Writes**: Safe concurrent processing
-- **Validation**: Built-in validation and confidence scoring
+- **SQLite Integration**: Built-in database with normalized relational schema
+- **Automatic Schema Creation**: Tables and indexes created automatically
+- **Real-time Stats**: Query database for insights and analytics
+- **Incremental Updates**: Efficient updating of existing data
 
 ## Supported Data Sources
 
@@ -52,6 +53,10 @@ faraday-data-processor/
 │   │   ├── coachMeProcessor.js   # Coach.me habits processor
 │   │   ├── sleepProcessor.js     # Sleep data processor
 │   │   └── manualHealthProcessor.js # Manual health data
+│   ├── database/           # Database integration
+│   │   ├── schema.js           # Database table schemas
+│   │   ├── connection.js       # SQLite connection manager
+│   │   └── dataMapper.js       # JSON to relational mapping
 │   ├── schemas/            # JSON schema definitions
 │   │   ├── base.js             # Common record structure
 │   │   ├── fitness.js          # Fitness data schema
@@ -95,6 +100,26 @@ npm run process -- --dry-run
 
 # Run built-in tests
 npm test
+
+## Database Operations
+
+# Process data and save to database
+npm run process-db
+
+# Create database and tables
+npm run db:create
+
+# Show database statistics  
+npm run db:stats
+
+# Reset database (delete all data)
+npm run db:reset
+
+# Vacuum database to reclaim space
+npm run db:vacuum
+
+# Query specific data
+node src/index.js query --start-date "01/01/2023" --end-date "12/31/2023" --source gyroscope
 ```
 
 ## Data Output Structure
@@ -123,6 +148,17 @@ All data is normalized into consistent JSON structures with guaranteed fields:
 - **`coach_me_habits.json`** - Habit tracking and streaks
 - **`sleep_tracker_sleep.json`** - Sleep analysis and quality
 - **`manual_health_health.json`** - Self-tracked symptoms and vitals
+
+### Database Tables
+When using database mode, data is stored in normalized relational tables:
+- **`health_records`** - Base table with all record metadata
+- **`fitness_metrics`** - Steps, calories, workouts, distance data
+- **`health_vitals`** - Heart rate, blood pressure, glucose, weight
+- **`sleep_sessions`** - Sleep duration, quality, efficiency metrics  
+- **`habits`** - Habit tracking with streaks and categories
+- **`symptoms`** - Symptom tracking, pain levels, conditions
+- **`medications`** - Medication tracking with dosages
+- **`locations`** - GPS and location data (for future use)
 
 ## Gyroscope Data Types Supported
 
@@ -250,6 +286,87 @@ npm run process -- --incremental
     "confidence": 0.8
   }
 }
+```
+
+## Database Integration
+
+### Quick Start with Database
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Create database
+npm run db:create
+
+# 3. Process data directly to database
+npm run process-db
+
+# 4. Check statistics
+npm run db:stats
+```
+
+### Database Features
+
+**Automatic Schema Management:**
+- Creates 8 normalized tables automatically
+- Foreign key relationships maintained
+- Proper indexing for fast queries
+- SQLite for portability and performance
+
+**Data Integrity:**
+- UPSERT operations prevent duplicates
+- Transaction-based batch inserts
+- Confidence scoring for data quality
+- Source attribution for all records
+
+**Query Capabilities:**
+```bash
+# Query by date range
+node src/index.js query --start-date "01/01/2023" --end-date "12/31/2023"
+
+# Filter by data source
+node src/index.js query --source "gyroscope" --limit 50
+
+# Filter by data type
+node src/index.js query --type "fitness" --limit 100
+
+# Get database statistics
+npm run db:stats
+```
+
+**Database Schema Overview:**
+```sql
+-- Base records table
+health_records (id, timestamp, source, data_type, sub_type, processed_at)
+
+-- Specialized data tables
+fitness_metrics (steps, calories, distance, workout_type, fuel_points)
+health_vitals (heart_rate, blood_pressure, glucose, weight, bmi)
+sleep_sessions (sleep_duration, quality, efficiency, deep_sleep)
+habits (habit_name, streak_days, category, completion_rate)
+symptoms (condition, severity, duration, pain_location)
+medications (medication_name, dosage, frequency)
+```
+
+### Example Database Usage
+
+```javascript
+const processor = new GyroscopeProcessor();
+
+// Initialize database
+await processor.initializeDatabase('./my-health-data.db');
+
+// Process files and save to database
+await processor.processFiles(files, false); // Process all files
+await processor.saveToDatabase(); // Save to database
+
+// Query data
+const records = await processor.getRecordsByDateRange('01/01/2023', '12/31/2023');
+const stats = await processor.getDatabaseStats();
+
+// Clean up
+processor.closeDatabase();
 ```
 
 ## Development

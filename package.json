@@ -6,11 +6,16 @@
   "scripts": {
     "start": "node src/index.js",
     "process": "node src/index.js process",
+    "process-db": "node src/index.js process --database",
     "analyze": "node src/index.js analyze", 
     "test": "node src/test.js",
     "test-jest": "jest",
     "lint": "eslint src/",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "db:create": "node src/index.js database --create",
+    "db:stats": "node src/index.js database --stats",
+    "db:reset": "node src/index.js database --reset",
+    "db:vacuum": "node src/index.js database --vacuum"
   },
   "bin": {
     "faraday-processor": "./src/index.js"
@@ -26,7 +31,9 @@
     "lodash": "^4.17.21",
     "fs-extra": "^11.1.1",
     "glob": "^10.3.0",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "sqlite3": "^5.1.6",
+    "better-sqlite3": "^8.7.0"
   },
   "devDependencies": {
     "jest": "^29.7.0",
