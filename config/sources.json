@@ -1,0 +1,81 @@
+{
+  "dataSources": {
+    "gyroscope": {
+      "enabled": true,
+      "path": "gyroscope/",
+      "filePattern": "gyroscope-*-export.csv",
+      "processor": "GyroscopeProcessor",
+      "priority": 1,
+      "description": "Gyroscope app CSV exports with multiple health metrics"
+    },
+    "nike_plus": {
+      "enabled": true,
+      "path": "Run Data/",
+      "filePattern": "NikePlus-*.json",
+      "processor": "NikePlusProcessor",
+      "priority": 2,
+      "description": "Nike+ FuelBand activity data"
+    },
+    "apple_health": {
+      "enabled": true,
+      "path": "apple_health_export_*/",
+      "filePattern": "export.xml",
+      "processor": "AppleHealthProcessor",
+      "priority": 3,
+      "description": "Apple Health comprehensive exports"
+    },
+    "moves": {
+      "enabled": false,
+      "path": "moves_export/",
+      "filePattern": "*.json",
+      "processor": "MovesProcessor",
+      "priority": 4,
+      "description": "Moves app location and activity data"
+    },
+    "coach_me": {
+      "enabled": true,
+      "path": "./",
+      "filePattern": "coach.me.export.*.csv",
+      "processor": "CoachMeProcessor",
+      "priority": 5,
+      "description": "Coach.me habit tracking data"
+    },
+    "sleep_data": {
+      "enabled": true,
+      "path": "./",
+      "filePattern": "sleepdata.csv",
+      "processor": "SleepProcessor",
+      "priority": 6,
+      "description": "Sleep tracking data"
+    },
+    "manual_health": {
+      "enabled": true,
+      "path": "./",
+      "filePattern": "*migraine*.csv",
+      "processor": "ManualHealthProcessor",
+      "priority": 7,
+      "description": "Manually tracked health data"
+    }
+  },
+  "output": {
+    "directory": "./output",
+    "format": "json",
+    "groupBy": "dataType",
+    "compression": false,
+    "backup": true,
+    "filenamePattern": "{source}_{dataType}_{timestamp}.json"
+  },
+  "processing": {
+    "batchSize": 1000,
+    "memoryLimit": "512MB",
+    "enableCache": true,
+    "cacheDirectory": "./.cache",
+    "enableValidation": true,
+    "strictMode": false
+  },
+  "dateFormat": {
+    "target": "MM/DD/YYYY HH:mm:ss",
+    "timezone": "local",
+    "handleTimezones": true
+  }
+}
