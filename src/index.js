@@ -4,8 +4,72 @@ const { Command } = require('commander');
 const path = require('path');
 const fs = require('fs-extra');
 const GyroscopeProcessor = require('./processors/gyroscopeProcessor');
+const NikePlusProcessor = require('./processors/nikePlusProcessor');
+const AppleHealthProcessor = require('./processors/appleHealthProcessor');
+const CoachMeProcessor = require('./processors/coachMeProcessor');
+const SleepProcessor = require('./processors/sleepProcessor');
+const ManualHealthProcessor = require('./processors/manualHealthProcessor');
 
 const program = new Command();
+
+/**
+ * Process a data source with common handling
+ * @param {string} name - Display name for the data source
+ * @param {BaseProcessor} processor - Processor instance
+ * @param {Function} getFiles - Function to get file list
+ * @param {string} outputPath - Output directory path
+ * @param {Object} options - CLI options
+ * @returns {Promise<Object>} Processing result
+ */
+async function processDataSource(name, processor, getFiles, outputPath, options) {
+  try {
+    console.log(`\n📊 Processing ${name} data...`);
+    
+    const files = await getFiles(processor);
+    
+    if (files.length === 0) {
+      console.log(`⚠️  No ${name} files found`);
+      return null;
+    }
+    
+    if (options.dryRun) {
+      console.log(`Would process ${files.length} files:`, files.slice(0, 5));
+      if (files.length > 5) console.log(`... and ${files.length - 5} more`);
+      return null;
+    }
+    
+    const result = await processor.processFiles(files, options.incremental);
+    
+    // Group records by data type for separate output files
+    const recordsByType = {};
+    result.records.forEach(record => {
+      const type = record.dataType;
+      if (!recordsByType[type]) recordsByType[type] = [];
+      recordsByType[type].push(record);
+    });
+    
+    // Save each data type to separate files
+    for (const [dataType, records] of Object.entries(recordsByType)) {
+      const sourceName = processor.sourceName.replace(/[^a-z0-9]/gi, '_');
+      const outputFile = path.join(outputPath, `${sourceName}_${dataType}.json`);
+      await processor.saveToJson(outputFile, records);
+    }
+    
+    console.log(`✅ ${name}: ${result.processed} records processed, ${result.errors} errors`);
+    
+    // Show statistics
+    const stats = processor.getStats();
+    console.log(`📈 Success rate: ${(stats.successRate * 100).toFixed(1)}%`);
+    if (stats.dateRange) {
+      console.log(`📅 Date range: ${stats.dateRange.earliest} to ${stats.dateRange.latest}`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error(`❌ Failed to process ${name}:`, error.message);
+    return null;
+  }
+}
 
 program
   .name('faraday-data-processor')
@@ -38,55 +102,91 @@ program
       let totalProcessed = 0;
       let totalErrors = 0;
       
+      const processorResults = [];
+
       // Process Gyroscope data
       if (!options.type || options.type === 'gyroscope') {
-        console.log('\n📊 Processing Gyroscope data...');
-        
-        const gyroscopeDir = path.join(sourcePath, 'gyroscope');
-        if (await fs.pathExists(gyroscopeDir)) {
-          const gyroscopeFiles = (await fs.readdir(gyroscopeDir))
-            .filter(file => file.endsWith('.csv'))
-            .map(file => path.join(gyroscopeDir, file));
-          
-          if (options.dryRun) {
-            console.log('Would process files:', gyroscopeFiles);
-            return;
-          }
-          
-          const processor = new GyroscopeProcessor();
-          const result = await processor.processFiles(gyroscopeFiles, options.incremental);
-          
-          // Group records by data type for separate output files
-          const recordsByType = {};
-          result.records.forEach(record => {
-            const type = record.dataType;
-            if (!recordsByType[type]) recordsByType[type] = [];
-            recordsByType[type].push(record);
-          });
-          
-          // Save each data type to separate files
-          for (const [dataType, records] of Object.entries(recordsByType)) {
-            const outputFile = path.join(outputPath, `gyroscope_${dataType}.json`);
-            await processor.saveToJson(outputFile, records);
-          }
-          
-          totalProcessed += result.processed;
-          totalErrors += result.errors;
-          
-          console.log(`✅ Gyroscope: ${result.processed} records processed, ${result.errors} errors`);
-          
-          // Show statistics
-          const stats = processor.getStats();
-          console.log(`📈 Success rate: ${(stats.successRate * 100).toFixed(1)}%`);
-          if (stats.dateRange) {
-            console.log(`📅 Date range: ${stats.dateRange.earliest} to ${stats.dateRange.latest}`);
-          }
-        } else {
-          console.log('⚠️  Gyroscope directory not found');
-        }
+        const result = await processDataSource(
+          'Gyroscope',
+          new GyroscopeProcessor(),
+          async (processor) => {
+            const gyroscopeDir = path.join(sourcePath, 'gyroscope');
+            if (await fs.pathExists(gyroscopeDir)) {
+              return (await fs.readdir(gyroscopeDir))
+                .filter(file => file.endsWith('.csv'))
+                .map(file => path.join(gyroscopeDir, file));
+            }
+            return [];
+          },
+          outputPath,
+          options
+        );
+        if (result) processorResults.push(result);
       }
-      
-      // TODO: Add other processors (Nike+, Apple Health, etc.)
+
+      // Process Nike+ data
+      if (!options.type || options.type === 'nike' || options.type === 'nikeplus') {
+        const result = await processDataSource(
+          'Nike+ FuelBand',
+          new NikePlusProcessor(),
+          async (processor) => await processor.getNikePlusFiles(sourcePath),
+          outputPath,
+          options
+        );
+        if (result) processorResults.push(result);
+      }
+
+      // Process Apple Health data
+      if (!options.type || options.type === 'apple' || options.type === 'apple_health') {
+        const result = await processDataSource(
+          'Apple Health',
+          new AppleHealthProcessor(),
+          async (processor) => await processor.getAppleHealthFiles(sourcePath),
+          outputPath,
+          options
+        );
+        if (result) processorResults.push(result);
+      }
+
+      // Process Coach.me data
+      if (!options.type || options.type === 'coach' || options.type === 'coachme') {
+        const result = await processDataSource(
+          'Coach.me',
+          new CoachMeProcessor(),
+          async (processor) => await processor.getCoachMeFiles(sourcePath),
+          outputPath,
+          options
+        );
+        if (result) processorResults.push(result);
+      }
+
+      // Process Sleep data
+      if (!options.type || options.type === 'sleep') {
+        const result = await processDataSource(
+          'Sleep Tracking',
+          new SleepProcessor(),
+          async (processor) => await processor.getSleepFiles(sourcePath),
+          outputPath,
+          options
+        );
+        if (result) processorResults.push(result);
+      }
+
+      // Process Manual Health data
+      if (!options.type || options.type === 'manual' || options.type === 'health') {
+        const result = await processDataSource(
+          'Manual Health',
+          new ManualHealthProcessor(),
+          async (processor) => await processor.getManualHealthFiles(sourcePath),
+          outputPath,
+          options
+        );
+        if (result) processorResults.push(result);
+      }
+
+      // Calculate totals
+      totalProcessed = processorResults.reduce((sum, r) => sum + r.processed, 0);
+      totalErrors = processorResults.reduce((sum, r) => sum + r.errors, 0);
       
       const totalTime = Date.now() - startTime;
       

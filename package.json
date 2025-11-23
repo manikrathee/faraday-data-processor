@@ -5,10 +5,15 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "process": "node src/index.js",
-    "test": "jest",
+    "process": "node src/index.js process",
+    "analyze": "node src/index.js analyze", 
+    "test": "node src/test.js",
+    "test-jest": "jest",
     "lint": "eslint src/",
     "dev": "nodemon src/index.js"
+  },
+  "bin": {
+    "faraday-processor": "./src/index.js"
   },
   "keywords": ["health", "fitness", "data-processing", "json", "normalization"],
   "author": "Manik Rathee",
@@ -20,7 +25,8 @@
     "moment": "^2.29.4",
     "lodash": "^4.17.21",
     "fs-extra": "^11.1.1",
-    "glob": "^10.3.0"
+    "glob": "^10.3.0",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "jest": "^29.7.0",

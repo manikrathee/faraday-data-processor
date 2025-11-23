@@ -32,12 +32,12 @@ A high-performance, modular data processing pipeline for normalizing health, fit
 | Source | Format | Data Types | Status |
 |--------|--------|------------|---------|
 | **Gyroscope App** | CSV | Steps, Sleep, Workouts, Health Metrics | ✅ Implemented |
-| **Apple Health** | XML | Comprehensive health data | 🔄 Planned |
-| **Nike+ FuelBand** | JSON/TCX | Activity tracking, Fuel points | 🔄 Planned |
+| **Apple Health** | XML | Comprehensive health data | ✅ Implemented |
+| **Nike+ FuelBand** | JSON/TCX | Activity tracking, Fuel points | ✅ Implemented |
+| **Coach.me** | CSV | Habit tracking, streaks | ✅ Implemented |
+| **Sleep Apps** | CSV | Sleep sessions, quality | ✅ Implemented |
+| **Manual Health** | CSV | Symptoms, medications, vitals | ✅ Implemented |
 | **Moves App** | JSON/CSV/GPX | Location, Activity tracking | 🔄 Planned |
-| **Coach.me** | CSV | Habit tracking | 🔄 Planned |
-| **Sleep Apps** | CSV | Sleep sessions, quality | 🔄 Planned |
-| **Manual Data** | CSV | Custom health tracking | 🔄 Planned |
 
 ## Architecture
 
@@ -46,8 +46,12 @@ faraday-data-processor/
 ├── src/
 │   ├── processors/          # Data source processors
 │   │   ├── baseProcessor.js     # Common functionality
-│   │   ├── gyroscopeProcessor.js # Gyroscope CSV processor  
-│   │   └── ...                  # Other processors
+│   │   ├── gyroscopeProcessor.js # Gyroscope CSV processor
+│   │   ├── nikePlusProcessor.js  # Nike+ FuelBand processor
+│   │   ├── appleHealthProcessor.js # Apple Health XML processor
+│   │   ├── coachMeProcessor.js   # Coach.me habits processor
+│   │   ├── sleepProcessor.js     # Sleep data processor
+│   │   └── manualHealthProcessor.js # Manual health data
 │   ├── schemas/            # JSON schema definitions
 │   │   ├── base.js             # Common record structure
 │   │   ├── fitness.js          # Fitness data schema
@@ -77,12 +81,20 @@ npm run process
 
 # Process specific data type
 npm run process -- --type=gyroscope
+npm run process -- --type=nike
+npm run process -- --type=apple
+npm run process -- --type=coach
+npm run process -- --type=sleep
+npm run process -- --type=manual
 
 # Process incrementally (new data only)
 npm run process -- --incremental
 
 # Dry run (see what would be processed)
 npm run process -- --dry-run
+
+# Run built-in tests
+npm test
 ```
 
 ## Data Output Structure
@@ -104,10 +116,13 @@ All data is normalized into consistent JSON structures with guaranteed fields:
 
 ### Output Files by Data Type
 - **`gyroscope_fitness.json`** - Steps, calories, distance, workouts
-- **`gyroscope_health.json`** - Heart rate, blood pressure, glucose, mood
+- **`gyroscope_health.json`** - Heart rate, blood pressure, glucose, mood  
 - **`gyroscope_sleep.json`** - Sleep sessions, quality metrics
-- **`apple_health_comprehensive.json`** - Complete Apple Health export
-- **`nike_plus_activity.json`** - Nike+ activity and fuel data
+- **`apple_health_mixed.json`** - Complete Apple Health export (all data types)
+- **`nike_plus_fitness.json`** - Nike+ activity and fuel data
+- **`coach_me_habits.json`** - Habit tracking and streaks
+- **`sleep_tracker_sleep.json`** - Sleep analysis and quality
+- **`manual_health_health.json`** - Self-tracked symptoms and vitals
 
 ## Gyroscope Data Types Supported
 
@@ -124,6 +139,38 @@ The GyroscopeProcessor currently handles 16+ data types from CSV exports:
 | `hrv` | Heart rate variability | Health |
 | `rhr` | Resting heart rate | Health |
 | `mood` | Mood tracking | Health |
+
+## Processor Capabilities
+
+### Nike+ FuelBand Processor
+- **JSON Activity Files**: Daily activity summaries with fuel points, steps, calories
+- **Minute-by-Minute Data**: Detailed breakdown of activity throughout the day
+- **Device Types**: FuelBand v1 and v2 support
+- **Date Range**: 2011-2014 historical data
+
+### Apple Health Processor  
+- **Large XML Support**: Streaming processor for multi-GB export files
+- **25+ Health Metrics**: Steps, heart rate, blood pressure, glucose, weight, etc.
+- **Workout Data**: Exercise sessions with duration, calories, distance
+- **Confidence Scoring**: Higher confidence for Apple device data
+
+### Coach.me Processor
+- **Habit Categories**: Automatic categorization (fitness, nutrition, mental health, etc.)
+- **Streak Tracking**: Days in streak, completion rates
+- **Multiple Habits**: Support for concurrent habit tracking
+- **Goal Analytics**: Progression and success metrics
+
+### Sleep Processor
+- **Format Detection**: Automatic detection of CSV delimiter and structure
+- **Multiple Formats**: Supports various sleep app exports
+- **Quality Metrics**: Sleep efficiency, quality percentages, duration
+- **Sleep Stages**: Deep, light, REM sleep breakdown (when available)
+
+### Manual Health Processor
+- **Smart Detection**: Automatic health data type detection from filename
+- **Symptom Tracking**: Migraines, pain, medications
+- **Severity Mapping**: Converts text severity to numeric scales
+- **Flexible Schema**: Handles various manual tracking formats
 
 ## Configuration
 
