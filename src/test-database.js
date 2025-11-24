@@ -94,7 +94,7 @@ async function runDatabaseTests() {
     console.log(`Database size after vacuum: ${fileSizeAfterVacuum}`);
     
     // Close connections
-    processor.closeDabase();
+    processor.closeDatabase();
     db.close();
     
     console.log('\n✅ All database tests passed!');
