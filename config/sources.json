@@ -25,7 +25,7 @@
       "description": "Apple Health comprehensive exports"
     },
     "moves": {
-      "enabled": false,
+      "enabled": true,
       "path": "moves_export/",
       "filePattern": "*.json",
       "processor": "MovesProcessor",

@@ -220,6 +220,19 @@ class DatabaseConnection {
   }
 
   /**
+   * Execute a non-SELECT query (INSERT, UPDATE, DELETE)
+   * @param {string} sql - SQL query
+   * @param {Array} params - Query parameters
+   * @returns {Object} Query result info
+   */
+  run(sql, params = []) {
+    if (!this.isConnected) {
+      throw new Error('Database not connected');
+    }
+    return this.db.prepare(sql).run(params);
+  }
+
+  /**
    * Execute a query and get first result
    * @param {string} sql - SQL query  
    * @param {Array} params - Query parameters

@@ -9,6 +9,7 @@ const AppleHealthProcessor = require('./processors/appleHealthProcessor');
 const CoachMeProcessor = require('./processors/coachMeProcessor');
 const SleepProcessor = require('./processors/sleepProcessor');
 const ManualHealthProcessor = require('./processors/manualHealthProcessor');
+const MovesProcessor = require('./processors/movesProcessor');
 const DatabaseConnection = require('./database/connection');
 const DataMapper = require('./database/dataMapper');
 
@@ -85,7 +86,7 @@ async function processDataSource(name, processor, getFiles, outputPath, options)
 
     // Close database connection
     if (options.database) {
-      processor.closeDabase();
+      processor.closeDatabase();
     }
     
     return result;
@@ -112,7 +113,12 @@ program
   .option('--db-path <path>', 'Database file path', './data/health_data.db')
   .action(async (options) => {
     try {
-      const sourcePath = path.resolve(options.source.replace('~', require('os').homedir()));
+      // Cross-platform path handling
+      let sourcePath = options.source;
+      if (sourcePath.startsWith('~')) {
+        sourcePath = path.join(require('os').homedir(), sourcePath.slice(1));
+      }
+      sourcePath = path.resolve(sourcePath);
       const outputPath = path.resolve(options.output);
       
       console.log('🚀 Faraday Data Processor');
@@ -211,6 +217,18 @@ program
         if (result) processorResults.push(result);
       }
 
+      // Process Moves data
+      if (!options.type || options.type === 'moves') {
+        const result = await processDataSource(
+          'Moves',
+          new MovesProcessor(),
+          async (processor) => await processor.getMovesFiles(sourcePath),
+          outputPath,
+          options
+        );
+        if (result) processorResults.push(result);
+      }
+
       // Calculate totals
       totalProcessed = processorResults.reduce((sum, r) => sum + r.processed, 0);
       totalErrors = processorResults.reduce((sum, r) => sum + r.errors, 0);
@@ -234,7 +252,12 @@ program
   .description('Analyze data sources without processing')
   .option('-s, --source <path>', 'Source data directory', '~/Developer/_Data-Source')
   .action(async (options) => {
-    const sourcePath = path.resolve(options.source.replace('~', require('os').homedir()));
+    // Cross-platform path handling
+    let sourcePath = options.source;
+    if (sourcePath.startsWith('~')) {
+      sourcePath = path.join(require('os').homedir(), sourcePath.slice(1));
+    }
+    sourcePath = path.resolve(sourcePath);
     
     console.log('🔍 Analyzing data sources...');
     console.log(`Source: ${sourcePath}`);

@@ -66,7 +66,8 @@ class GyroscopeProcessor extends BaseProcessor {
    * @returns {Object} Processed record
    */
   processStepsRecord(row, subType) {
-    const record = this.createBaseRecord(row, row.date, subType);
+    const timestamp = this.extractTimestamp(row);
+    const record = this.createBaseRecord(row, timestamp, subType);
     record.dataType = 'fitness';
     
     record.steps = this.createMetricValue(
@@ -87,7 +88,8 @@ class GyroscopeProcessor extends BaseProcessor {
    * @returns {Object} Processed record
    */
   processSleepRecord(row, subType) {
-    const record = this.createBaseRecord(row, row.start_time, subType);
+    const timestamp = this.extractTimestamp(row) || row.start_time;
+    const record = this.createBaseRecord(row, timestamp, subType);
     record.dataType = 'sleep';
     
     // Parse start and end times
@@ -110,7 +112,8 @@ class GyroscopeProcessor extends BaseProcessor {
    * @returns {Object} Processed record
    */
   processWorkoutRecord(row, subType) {
-    const record = this.createBaseRecord(row, row.start_time, subType);
+    const timestamp = this.extractTimestamp(row) || row.start_time;
+    const record = this.createBaseRecord(row, timestamp, subType);
     record.dataType = 'fitness';
     
     record.workout_id = row.id;
@@ -134,23 +137,52 @@ class GyroscopeProcessor extends BaseProcessor {
   }
 
   /**
+   * Extract timestamp from CSV row with field name variations
+   * @param {Object} row - CSV row
+   * @returns {string} Timestamp string
+   */
+  extractTimestamp(row) {
+    // Try common timestamp field names
+    const timestampFields = [
+      'timestamp', 'date', 'time',           // Standard fields
+      'Start Time', 'start_time',            // Gyroscope location visits
+      'End Time', 'end_time'                 // Alternative for some records
+    ];
+    
+    for (const field of timestampFields) {
+      if (row[field] && row[field].trim()) {
+        return row[field];
+      }
+    }
+    
+    return null;
+  }
+
+  /**
    * Process health metric data (BP, glucose, HRV, etc.)
    * @param {Object} row - CSV row
    * @param {string} subType - Data subtype
    * @returns {Object} Processed record
    */
   processHealthRecord(row, subType) {
-    const record = this.createBaseRecord(row, row.date || row.timestamp, subType);
+    const timestamp = this.extractTimestamp(row);
+    const record = this.createBaseRecord(row, timestamp, subType);
     record.dataType = 'health';
     
     // Handle different health metrics based on subtype
     switch (subType) {
       case 'bp':
-        // Blood pressure format varies - need to parse actual data
-        record.blood_pressure = {
-          systolic: this.createMetricValue(0, 'mmHg', 0.8),
-          diastolic: this.createMetricValue(0, 'mmHg', 0.8)
-        };
+        // Blood pressure format: time,systolic,diastolic,service
+        const systolicValue = row.systolic ? parseFloat(row.systolic) : null;
+        const diastolicValue = row.diastolic ? parseFloat(row.diastolic) : null;
+        
+        if (systolicValue !== null && diastolicValue !== null && 
+            systolicValue > 0 && diastolicValue > 0) {
+          record.blood_pressure = {
+            systolic: this.createMetricValue(systolicValue, 'mmHg', 0.8),
+            diastolic: this.createMetricValue(diastolicValue, 'mmHg', 0.8)
+          };
+        }
         break;
         
       case 'glucose':
@@ -178,6 +210,24 @@ class GyroscopeProcessor extends BaseProcessor {
       case 'mood':
         record.mood_score = row.mood;
         record.notes = row.notes || '';
+        break;
+        
+      case 'gvisits':
+        // Location visits - process as health data type but add location fields
+        record.location = {
+          name: row.Name || row.name || '',
+          latitude: row.Latitude ? parseFloat(row.Latitude) : null,
+          longitude: row.Longitude ? parseFloat(row.Longitude) : null
+        };
+        
+        // Duration if both start and end times are available
+        if (row['Start Time'] && row['End Time']) {
+          record.visit_start = this.dateNormalizer.normalize(row['Start Time']);
+          record.visit_end = this.dateNormalizer.normalize(row['End Time']);
+          
+          const durationMinutes = this.dateNormalizer.calculateDuration(row['Start Time'], row['End Time']);
+          record.visit_duration = this.createMetricValue(durationMinutes, 'minutes', 0.8);
+        }
         break;
     }
     

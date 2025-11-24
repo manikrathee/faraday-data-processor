@@ -78,11 +78,12 @@ class DataMapper {
   }
 
   /**
-   * Insert or update a batch of health records
+   * Insert or update a batch of health records using batched transactions
    * @param {Array} records - Array of processed health records
+   * @param {number} batchSize - Size of each batch (default: 1000)
    * @returns {Object} Insert results
    */
-  insertRecords(records) {
+  insertRecords(records, batchSize = 1000) {
     const results = {
       totalRecords: records.length,
       inserted: 0,
@@ -90,23 +91,44 @@ class DataMapper {
       errorDetails: []
     };
 
-    const transaction = this.db.db.transaction((records) => {
-      for (const record of records) {
-        try {
-          this.insertSingleRecord(record);
-          results.inserted++;
-        } catch (error) {
-          results.errors++;
+    // Process records in batches to avoid memory issues and transaction timeouts
+    for (let i = 0; i < records.length; i += batchSize) {
+      const batch = records.slice(i, i + batchSize);
+      
+      console.log(`💾 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(records.length / batchSize)} (${batch.length} records)`);
+      
+      const transaction = this.db.db.transaction((batchRecords) => {
+        for (const record of batchRecords) {
+          try {
+            this.insertSingleRecord(record);
+            results.inserted++;
+          } catch (error) {
+            results.errors++;
+            results.errorDetails.push({
+              recordId: record.id,
+              error: error.message,
+              record: record
+            });
+          }
+        }
+      });
+
+      try {
+        transaction(batch);
+      } catch (error) {
+        // If entire batch fails, mark all records as errors
+        console.error(`Batch transaction failed: ${error.message}`);
+        results.errors += batch.length;
+        batch.forEach(record => {
           results.errorDetails.push({
             recordId: record.id,
-            error: error.message,
+            error: `Batch transaction failed: ${error.message}`,
             record: record
           });
-        }
+        });
       }
-    });
+    }
 
-    transaction(records);
     return results;
   }
 
