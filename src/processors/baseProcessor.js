@@ -220,7 +220,7 @@ class BaseProcessor {
   /**
    * Close database connection
    */
-  closeDabase() {
+  closeDatabase() {
     if (this.db) {
       this.db.close();
       this.db = null;

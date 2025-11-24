@@ -10,6 +10,8 @@
     "analyze": "node src/index.js analyze", 
     "test": "node src/test.js",
     "test-jest": "jest",
+    "test-validation": "node src/quick-validation.js",
+    "test-enterprise": "node src/comprehensive-validation.js",
     "lint": "eslint src/",
     "dev": "nodemon src/index.js",
     "db:create": "node src/index.js database --create",
@@ -20,7 +22,7 @@
   "bin": {
     "faraday-processor": "./src/index.js"
   },
-  "keywords": ["health", "fitness", "data-processing", "json", "normalization"],
+  "keywords": ["health", "fitness", "data-processing", "json", "normalization", "enterprise"],
   "author": "Manik Rathee",
   "license": "MIT",
   "dependencies": {
