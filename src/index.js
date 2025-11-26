@@ -43,8 +43,19 @@ async function processDataSource(name, processor, getFiles, outputPath, options)
 
     // Initialize database if requested
     if (options.database) {
-      const dbPath = options.database === true ? options.dbPath : options.database;
-      await processor.initializeDatabase(dbPath);
+      if (options.dbType === 'mysql') {
+        const mysqlConfig = {
+          host: options.mysqlHost,
+          port: parseInt(options.mysqlPort),
+          user: options.mysqlUser,
+          password: options.mysqlPassword,
+          database: options.mysqlDatabase
+        };
+        await processor.initializeDatabase(mysqlConfig, 'mysql');
+      } else {
+        const dbPath = options.database === true ? options.dbPath : options.database;
+        await processor.initializeDatabase(dbPath, 'sqlite');
+      }
     }
     
     const result = await processor.processFiles(files, options.incremental);
@@ -86,7 +97,7 @@ async function processDataSource(name, processor, getFiles, outputPath, options)
 
     // Close database connection
     if (options.database) {
-      processor.closeDatabase();
+      await processor.closeDatabase();
     }
     
     return result;
@@ -111,6 +122,12 @@ program
   .option('--dry-run', 'Show what would be processed without actually processing', false)
   .option('-d, --database [path]', 'Save to database (optional path)', false)
   .option('--db-path <path>', 'Database file path', './data/health_data.db')
+  .option('--db-type <type>', 'Database type: sqlite or mysql', 'sqlite')
+  .option('--mysql-host <host>', 'MySQL host', 'localhost')
+  .option('--mysql-port <port>', 'MySQL port', '3306')
+  .option('--mysql-user <user>', 'MySQL user', 'root')
+  .option('--mysql-password <password>', 'MySQL password', '')
+  .option('--mysql-database <database>', 'MySQL database name', 'faraday_health_data')
   .action(async (options) => {
     try {
       // Cross-platform path handling
@@ -126,7 +143,7 @@ program
       console.log(`Output: ${outputPath}`);
       console.log(`Incremental: ${options.incremental}`);
       console.log(`Type filter: ${options.type || 'all'}`);
-      console.log(`Database: ${options.database ? (options.database === true ? options.dbPath : options.database) : 'disabled'}`);
+      console.log(`Database: ${options.database ? `${options.dbType} (${options.dbType === 'mysql' ? `${options.mysqlHost}:${options.mysqlPort}/${options.mysqlDatabase}` : (options.database === true ? options.dbPath : options.database)})` : 'disabled'}`);
       
       // Ensure output directory exists
       await fs.ensureDir(outputPath);

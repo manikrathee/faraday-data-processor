@@ -2,7 +2,9 @@ const { v4: uuidv4 } = require('uuid');
 const DateNormalizer = require('../utils/dateNormalizer');
 const FileProcessor = require('../utils/fileProcessor');
 const DatabaseConnection = require('../database/connection');
+const MySQLConnection = require('../database/mysqlConnection');
 const DataMapper = require('../database/dataMapper');
+const MySQLDataMapper = require('../database/mysqlDataMapper');
 
 /**
  * Base processor class for all data source processors
@@ -20,6 +22,8 @@ class BaseProcessor {
     // Database integration
     this.enableDatabase = options.enableDatabase || false;
     this.dbPath = options.dbPath || './data/health_data.db';
+    this.dbType = options.dbType || 'sqlite'; // 'sqlite' or 'mysql'
+    this.dbConfig = options.dbConfig || {}; // MySQL connection config
     this.db = null;
     this.dataMapper = null;
   }
@@ -197,32 +201,60 @@ class BaseProcessor {
 
   /**
    * Initialize database connection
-   * @param {string} dbPath - Optional database path override
+   * @param {string|Object} dbConfig - Database path for SQLite or config object for MySQL
+   * @param {string} dbType - Database type: 'sqlite' or 'mysql'
    */
-  async initializeDatabase(dbPath = null) {
-    if (dbPath) this.dbPath = dbPath;
+  async initializeDatabase(dbConfig = null, dbType = null) {
+    if (dbType) this.dbType = dbType;
     
-    this.db = new DatabaseConnection(this.dbPath);
-    await this.db.connect();
-    
-    // Create tables if they don't exist
-    const exists = await this.db.databaseExists();
-    if (!exists) {
-      await this.db.createTables();
+    if (this.dbType === 'mysql') {
+      // Initialize MySQL connection
+      const mysqlConfig = (typeof dbConfig === 'object') ? dbConfig : this.dbConfig;
+      this.db = new MySQLConnection(mysqlConfig);
+      await this.db.connect();
+      
+      // Create tables if they don't exist
+      const exists = await this.db.databaseExists();
+      if (!exists) {
+        await this.db.createTables();
+      }
+      
+      console.log(`🗄️  MySQL database initialized: ${mysqlConfig.host}:${mysqlConfig.port}/${mysqlConfig.database}`);
+    } else {
+      // Initialize SQLite connection (default)
+      if (typeof dbConfig === 'string') this.dbPath = dbConfig;
+      
+      this.db = new DatabaseConnection(this.dbPath);
+      await this.db.connect();
+      
+      // Create tables if they don't exist
+      const exists = await this.db.databaseExists();
+      if (!exists) {
+        await this.db.createTables();
+      }
+      
+      console.log(`📊 SQLite database initialized: ${this.dbPath}`);
     }
     
-    this.dataMapper = new DataMapper(this.db);
+    // Use appropriate DataMapper based on database type
+    if (this.dbType === 'mysql') {
+      this.dataMapper = new MySQLDataMapper(this.db);
+    } else {
+      this.dataMapper = new DataMapper(this.db);
+    }
     this.enableDatabase = true;
-    
-    console.log(`📊 Database initialized: ${this.dbPath}`);
   }
 
   /**
    * Close database connection
    */
-  closeDatabase() {
+  async closeDatabase() {
     if (this.db) {
-      this.db.close();
+      if (this.dbType === 'mysql') {
+        await this.db.close();
+      } else {
+        this.db.close();
+      }
       this.db = null;
       this.dataMapper = null;
       this.enableDatabase = false;
@@ -245,7 +277,7 @@ class BaseProcessor {
     }
 
     console.log(`💾 Saving ${dataToSave.length} records to database...`);
-    const result = this.dataMapper.insertRecords(dataToSave);
+    const result = await this.dataMapper.insertRecords(dataToSave);
     
     console.log(`✅ Database: ${result.inserted} records saved, ${result.errors} errors`);
     
