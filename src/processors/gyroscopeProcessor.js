@@ -144,7 +144,7 @@ class GyroscopeProcessor extends BaseProcessor {
   extractTimestamp(row) {
     // Try common timestamp field names
     const timestampFields = [
-      'timestamp', 'date', 'time',           // Standard fields
+      'timestamp', 'date', 'time', 'Time',   // Standard fields (including capital Time)
       'Start Time', 'start_time',            // Gyroscope location visits
       'End Time', 'end_time'                 // Alternative for some records
     ];

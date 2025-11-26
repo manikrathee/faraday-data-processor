@@ -14,6 +14,7 @@ class DateNormalizer {
       'MM/DD/YYYY HH:mm:ss',     // Target format
       'MM/DD/YYYY',              // Target date only
       'YYYY-MM-DD HH:mm +ZZOO',  // Twitter format
+      'YYYY-MM-DD HH:mm:ss ZZ',  // Apple Health format
       'YYYY-MM-DD HH:mm:ss.SSS', // With milliseconds
       'ddd MMM DD HH:mm:ss YYYY' // Nike+ format
     ];
