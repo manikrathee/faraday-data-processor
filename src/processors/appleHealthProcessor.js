@@ -23,10 +23,13 @@ class AppleHealthProcessor extends BaseProcessor {
       'HKQuantityTypeIdentifierActiveEnergyBurned': 'fitness',
       'HKQuantityTypeIdentifierBasalEnergyBurned': 'fitness',
       'HKQuantityTypeIdentifierFlightsClimbed': 'fitness',
+      'HKQuantityTypeIdentifierAppleExerciseTime': 'fitness',
+      'HKQuantityTypeIdentifierAppleStandTime': 'fitness',
       
       // Health metrics
       'HKQuantityTypeIdentifierHeartRate': 'health',
       'HKQuantityTypeIdentifierRestingHeartRate': 'health',
+      'HKQuantityTypeIdentifierWalkingHeartRateAverage': 'health',
       'HKQuantityTypeIdentifierHeartRateVariabilitySDNN': 'health',
       'HKQuantityTypeIdentifierBloodPressureSystolic': 'health',
       'HKQuantityTypeIdentifierBloodPressureDiastolic': 'health',
@@ -34,14 +37,33 @@ class AppleHealthProcessor extends BaseProcessor {
       'HKQuantityTypeIdentifierBodyMass': 'health',
       'HKQuantityTypeIdentifierHeight': 'health',
       'HKQuantityTypeIdentifierBodyMassIndex': 'health',
+      'HKQuantityTypeIdentifierBodyFatPercentage': 'health',
+      'HKQuantityTypeIdentifierLeanBodyMass': 'health',
       'HKQuantityTypeIdentifierOxygenSaturation': 'health',
       'HKQuantityTypeIdentifierBodyTemperature': 'health',
+      'HKQuantityTypeIdentifierRespiratoryRate': 'health',
+      'HKQuantityTypeIdentifierVO2Max': 'health',
+      'HKQuantityTypeIdentifierBloodAlcoholContent': 'health',
+      'HKQuantityTypeIdentifierDietaryWater': 'health',
+      'HKQuantityTypeIdentifierDietaryEnergyConsumed': 'health',
+      'HKQuantityTypeIdentifierDietaryCarbohydrates': 'health',
+      'HKQuantityTypeIdentifierDietaryProtein': 'health',
+      'HKQuantityTypeIdentifierDietaryFatTotal': 'health',
+      'HKQuantityTypeIdentifierDietaryFiber': 'health',
+      'HKQuantityTypeIdentifierDietarySugar': 'health',
+      'HKQuantityTypeIdentifierDietarySodium': 'health',
+      'HKQuantityTypeIdentifierEnvironmentalAudioExposure': 'health',
+      'HKQuantityTypeIdentifierPhysicalEffort': 'fitness',
       
       // Sleep
       'HKCategoryTypeIdentifierSleepAnalysis': 'sleep',
       
       // Workouts
-      'HKWorkoutTypeIdentifier': 'fitness'
+      'HKWorkoutTypeIdentifier': 'fitness',
+      
+      // Additional categories that may exist
+      'HKCategoryTypeIdentifierAppleStandHour': 'fitness',
+      'HKCategoryTypeIdentifierMindfulSession': 'health'
     };
     
     this.unitMapping = {
@@ -128,62 +150,111 @@ class AppleHealthProcessor extends BaseProcessor {
   }
 
   /**
-   * Process large XML files with streaming (simplified approach)
+   * Process large XML files with streaming (optimized approach)
    * @param {string} filePath - Path to XML file  
    * @returns {Promise<Object[]>} Array of processed records
    */
   async processLargeXmlFile(filePath) {
-    console.log('Large file processing - implementing simplified record extraction');
+    console.log('Large file processing - implementing optimized record extraction with sampling');
     
-    // For very large files, we'll read in chunks and extract records
     const records = [];
     let buffer = '';
     let recordCount = 0;
-    const maxRecords = 10000; // Limit for performance
+    let totalRecordsFound = 0;
+    const maxRecords = 50000; // Target records to process  
+    const chunkSize = 1024 * 1024; // 1MB chunks
+    const sampleRate = 10; // Process every 10th record to get better distribution
     
     return new Promise((resolve, reject) => {
-      const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+      const stream = fs.createReadStream(filePath, { 
+        encoding: 'utf8',
+        highWaterMark: chunkSize 
+      });
       
-      stream.on('data', (chunk) => {
+      stream.on('data', async (chunk) => {
         buffer += chunk;
         
-        // Extract complete Record elements
-        let recordMatch;
-        const recordRegex = /<Record[^>]*>.*?<\/Record>/g;
+        // Process complete records synchronously to avoid async issues
+        const recordMatches = [];
+        const recordRegex = /<Record[^>]*\/>/g; // Self-closing records first
+        let match;
         
-        while ((recordMatch = recordRegex.exec(buffer)) !== null && recordCount < maxRecords) {
-          try {
-            const recordXml = recordMatch[0];
-            this.parseRecordFromXml(recordXml).then(record => {
-              if (record && this.validateRecord(record)) {
-                records.push(record);
-              }
-            });
+        // Extract self-closing Record elements with sampling
+        while ((match = recordRegex.exec(buffer)) !== null && recordCount < maxRecords) {
+          totalRecordsFound++;
+          if (totalRecordsFound % sampleRate === 0) {
+            recordMatches.push({ xml: match[0], index: match.index });
             recordCount++;
-          } catch (error) {
-            this.logError('Error parsing XML record', error.message);
           }
         }
         
-        // Keep only the unprocessed part of buffer
-        const lastRecordEnd = buffer.lastIndexOf('</Record>');
-        if (lastRecordEnd > -1) {
-          buffer = buffer.substring(lastRecordEnd + 9);
+        // Extract paired Record elements with sampling
+        const pairedRegex = /<Record[^>]*>.*?<\/Record>/g;
+        while ((match = pairedRegex.exec(buffer)) !== null && recordCount < maxRecords) {
+          totalRecordsFound++;
+          if (totalRecordsFound % sampleRate === 0) {
+            recordMatches.push({ xml: match[0], index: match.index });
+            recordCount++;
+          }
+        }
+        
+        // Process records synchronously
+        for (const recordMatch of recordMatches) {
+          try {
+            const record = await this.parseRecordFromXmlSync(recordMatch.xml);
+            if (record && this.validateRecord(record)) {
+              records.push(record);
+            }
+          } catch (error) {
+            // Skip invalid records silently for performance
+          }
+        }
+        
+        // More aggressive buffer management
+        if (recordMatches.length > 0) {
+          const lastIndex = Math.max(...recordMatches.map(m => m.index + m.xml.length));
+          buffer = buffer.substring(lastIndex);
+        } else if (buffer.length > chunkSize * 2) {
+          // Prevent buffer from growing too large
+          buffer = buffer.substring(chunkSize);
         }
         
         if (recordCount >= maxRecords) {
-          console.log(`Limiting to ${maxRecords} records for performance`);
+          console.log(`Reached ${maxRecords} record limit for performance`);
           stream.destroy();
+          resolve(records);
         }
       });
       
       stream.on('end', () => {
-        console.log(`Extracted ${records.length} records from large Apple Health file`);
+        console.log(`Sampled ${records.length} records from ${totalRecordsFound} total records in Apple Health file`);
         resolve(records);
       });
       
       stream.on('error', reject);
     });
+  }
+
+  /**
+   * Parse a single record from XML string synchronously
+   * @param {string} xmlString - XML string for one record
+   * @returns {Object|null} Processed record or null
+   */
+  parseRecordFromXmlSync(xmlString) {
+    try {
+      // Extract attributes directly from XML string for performance
+      const attributes = {};
+      const attrRegex = /(\w+)="([^"]*)"/g;
+      let attrMatch;
+      
+      while ((attrMatch = attrRegex.exec(xmlString)) !== null) {
+        attributes[attrMatch[1]] = attrMatch[2];
+      }
+      
+      return this.processHealthRecord(attributes);
+    } catch (error) {
+      return null;
+    }
   }
 
   /**
@@ -211,6 +282,11 @@ class AppleHealthProcessor extends BaseProcessor {
     
     const recordType = record.type;
     const dataType = this.typeMapping[recordType] || 'unknown';
+    
+    // Track data type distribution
+    if (!this.typeCount) this.typeCount = {};
+    if (!this.typeCount[dataType]) this.typeCount[dataType] = 0;
+    this.typeCount[dataType]++;
     
     if (dataType === 'unknown') {
       // Skip unknown types to avoid noise
