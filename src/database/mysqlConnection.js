@@ -13,14 +13,14 @@ class MySQLConnection {
       port: options.port || process.env.MYSQL_PORT || 3306,
       user: options.user || process.env.MYSQL_USER || 'root',
       password: options.password || process.env.MYSQL_PASSWORD || '',
-      database: options.database || process.env.MYSQL_DATABASE || 'faraday_health_data',
+      database: options.database || process.env.MYSQL_DATABASE || 'm_health_data',
       charset: 'utf8mb4',
       acquireTimeout: 60000,
       timeout: 60000,
       reconnect: true,
       ...options
     };
-    
+
     this.pool = null;
     this.isConnected = false;
     this.dbName = this.config.database;
@@ -34,17 +34,17 @@ class MySQLConnection {
       // First connect without database to create it if needed
       const tempConfig = { ...this.config };
       delete tempConfig.database;
-      
+
       const tempConnection = await mysql.createConnection(tempConfig);
-      
+
       // Create database if it doesn't exist
       await tempConnection.execute(`CREATE DATABASE IF NOT EXISTS \`${this.dbName}\``);
       await tempConnection.end();
-      
+
       // Now connect to the specific database
       this.pool = mysql.createPool(this.config);
       this.isConnected = true;
-      
+
       console.log(`🗄️  Connected to MySQL database: ${this.config.host}:${this.config.port}/${this.dbName}`);
     } catch (error) {
       console.error('Failed to connect to MySQL:', error);
@@ -209,9 +209,9 @@ class MySQLConnection {
     }
 
     console.log('⚠️  Dropping all MySQL tables...');
-    
+
     const tables = ['location_data', 'sleep_sessions', 'health_vitals', 'fitness_metrics', 'health_records'];
-    
+
     for (const table of tables) {
       await this.execute(`DROP TABLE IF EXISTS ${table}`);
       console.log(`🗑️  Dropped table: ${table}`);
@@ -265,7 +265,7 @@ class MySQLConnection {
         FROM health_records 
         GROUP BY source
       `);
-      
+
       sourceResults.forEach(row => {
         stats.recordsBySource[row.source] = row.count;
       });
@@ -276,7 +276,7 @@ class MySQLConnection {
         FROM health_records 
         GROUP BY data_type
       `);
-      
+
       typeResults.forEach(row => {
         stats.recordsByType[row.data_type] = row.count;
       });
@@ -289,7 +289,7 @@ class MySQLConnection {
         FROM health_records
         WHERE date_only IS NOT NULL
       `);
-      
+
       if (dateResult[0]?.earliest && dateResult[0]?.latest) {
         stats.dateRange = {
           earliest: dateResult[0].earliest,
@@ -354,10 +354,10 @@ class MySQLConnection {
     if (!this.isConnected) {
       throw new Error('Database not connected');
     }
-    
+
     const connection = await this.pool.getConnection();
     await connection.beginTransaction();
-    
+
     try {
       const result = await transactionFn(connection);
       await connection.commit();
@@ -377,14 +377,14 @@ class MySQLConnection {
     if (!this.isConnected) {
       await this.connect();
     }
-    
+
     try {
       const [result] = await this.query(`
         SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS size_mb
         FROM information_schema.tables 
         WHERE table_schema = ?
       `, [this.dbName]);
-      
+
       const sizeInMB = result[0]?.size_mb || 0;
       return `${sizeInMB} MB`;
     } catch (error) {

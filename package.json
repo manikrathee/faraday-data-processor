@@ -1,5 +1,5 @@
 {
-  "name": "faraday-data-processor",
+  "name": "m-data-processor",
   "version": "1.0.0",
   "description": "High-performance data processing pipeline for health and fitness data normalization",
   "main": "src/index.js",
@@ -21,9 +21,16 @@
     "db:vacuum": "node src/index.js database --vacuum"
   },
   "bin": {
-    "faraday-processor": "./src/index.js"
+    "m-processor": "./src/index.js"
   },
-  "keywords": ["health", "fitness", "data-processing", "json", "normalization", "enterprise"],
+  "keywords": [
+    "health",
+    "fitness",
+    "data-processing",
+    "json",
+    "normalization",
+    "enterprise"
+  ],
   "author": "Manik Rathee",
   "license": "MIT",
   "dependencies": {

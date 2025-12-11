@@ -1,4 +1,4 @@
-# Faraday Data Processor
+# M Data Processor
 
 A high-performance, modular data processing pipeline for normalizing health, fitness, and personal data from multiple sources into consistent JSON output optimized for database ingestion.
 
@@ -43,7 +43,7 @@ A high-performance, modular data processing pipeline for normalizing health, fit
 ## Architecture
 
 ```
-faraday-data-processor/
+m-data-processor/
 ├── src/
 │   ├── processors/          # Data source processors
 │   │   ├── baseProcessor.js     # Common functionality

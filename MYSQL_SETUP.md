@@ -1,6 +1,6 @@
 # MySQL Database Setup
 
-This document explains how to set up MySQL database support for the Faraday Data Processor.
+This document explains how to set up MySQL database support for the M Data Processor.
 
 ## Prerequisites
 
@@ -35,8 +35,8 @@ mysql_secure_installation
 mysql -u root -p
 
 -- Create dedicated user for the application
-CREATE USER 'faraday_user'@'localhost' IDENTIFIED BY 'your_secure_password';
-GRANT ALL PRIVILEGES ON faraday_health_data.* TO 'faraday_user'@'localhost';
+CREATE USER 'm_user'@'localhost' IDENTIFIED BY 'your_secure_password';
+GRANT ALL PRIVILEGES ON m_health_data.* TO 'm_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
@@ -45,9 +45,9 @@ Create a `.env` file in the project root:
 ```env
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
-MYSQL_USER=faraday_user
+MYSQL_USER=m_user
 MYSQL_PASSWORD=your_secure_password
-MYSQL_DATABASE=faraday_health_data
+MYSQL_DATABASE=m_health_data
 ```
 
 ## Usage
@@ -59,7 +59,7 @@ MYSQL_DATABASE=faraday_health_data
 npm run process-mysql
 
 # Or with custom configuration:
-npm run process -- --database --db-type mysql --mysql-host localhost --mysql-user faraday_user --mysql-password your_password
+npm run process -- --database --db-type mysql --mysql-host localhost --mysql-user m_user --mysql-password your_password
 ```
 
 **Process specific data type:**
@@ -69,7 +69,7 @@ npm run process -- --type apple --database --db-type mysql
 
 **Environment Variables:**
 ```bash
-export MYSQL_USER=faraday_user
+export MYSQL_USER=m_user
 export MYSQL_PASSWORD=your_password
 npm run process-mysql
 ```
@@ -107,13 +107,13 @@ SELECT
     table_schema AS 'Database',
     ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS 'Size (MB)'
 FROM information_schema.tables
-WHERE table_schema = 'faraday_health_data'
+WHERE table_schema = 'm_health_data'
 GROUP BY table_schema;
 ```
 
 ### View record counts:
 ```sql
-USE faraday_health_data;
+USE m_health_data;
 
 SELECT 'health_records' AS table_name, COUNT(*) AS record_count FROM health_records
 UNION ALL
@@ -136,7 +136,7 @@ SELECT 'location_data', COUNT(*) FROM location_data;
 ### Permission Issues
 ```sql
 -- Grant additional permissions if needed
-GRANT CREATE, ALTER, DROP, INDEX ON faraday_health_data.* TO 'faraday_user'@'localhost';
+GRANT CREATE, ALTER, DROP, INDEX ON m_health_data.* TO 'm_user'@'localhost';
 ```
 
 ### Large Dataset Issues

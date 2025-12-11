@@ -39,19 +39,19 @@ class ComprehensiveValidation {
     // Phase 1: File Discovery
     console.log('📂 Phase 1: File Discovery & Classification');
     await this.discoverFiles();
-    
+
     // Phase 2: Processor Testing
     console.log('\n🔄 Phase 2: Processor Validation');
     await this.validateProcessors();
-    
+
     // Phase 3: Data Quality Analysis
     console.log('\n🔍 Phase 3: Data Quality Analysis');
     await this.analyzeDataQuality();
-    
+
     // Phase 4: Generate Report
     console.log('\n📊 Phase 4: Enterprise Quality Report');
     const report = await this.generateReport();
-    
+
     return report;
   }
 
@@ -73,13 +73,13 @@ class ComprehensiveValidation {
         dot: false,
         nodir: true
       });
-      
-      const filteredFiles = allFiles.filter(file => 
-        !file.includes('.zip') && 
+
+      const filteredFiles = allFiles.filter(file =>
+        !file.includes('.zip') &&
         !file.includes('.tar') &&
         !file.includes('.DS_Store')
       );
-      
+
       discovery.totalFiles = filteredFiles.length;
       console.log(`  Found ${discovery.totalFiles} data files`);
 
@@ -94,12 +94,12 @@ class ComprehensiveValidation {
       ];
 
       let totalRecognized = 0;
-      
+
       for (const { name, class: ProcessorClass, method } of processors) {
         try {
           const processor = new ProcessorClass();
           let files = [];
-          
+
           if (method === 'getGyroscopeFiles') {
             // Special handling for Gyroscope - look in gyroscope directory
             const gyroDir = path.join(this.dataSourcePath, 'gyroscope');
@@ -111,31 +111,31 @@ class ComprehensiveValidation {
           } else if (processor[method]) {
             files = await processor[method](this.dataSourcePath);
           }
-          
+
           discovery.byProcessor[name] = {
             files: files.length,
             fileList: files.slice(0, 5), // Sample for report
             avgFileSize: await this.getAvgFileSize(files.slice(0, 5))
           };
-          
+
           totalRecognized += files.length;
           console.log(`  ${name}: ${files.length} files`);
-          
+
         } catch (error) {
           discovery.potentialIssues.push(`${name}: ${error.message}`);
         }
       }
-      
+
       discovery.recognizedFiles = totalRecognized;
       discovery.unrecognizedFiles = discovery.totalFiles - totalRecognized;
       discovery.recognitionRate = ((totalRecognized / discovery.totalFiles) * 100).toFixed(1);
-      
+
     } catch (error) {
       discovery.potentialIssues.push(`File discovery error: ${error.message}`);
     }
 
     this.results.overview = discovery;
-    
+
     console.log(`  Recognition Rate: ${discovery.recognitionRate}%`);
     if (discovery.unrecognizedFiles > 0) {
       console.log(`  ⚠️  ${discovery.unrecognizedFiles} unrecognized files`);
@@ -154,7 +154,7 @@ class ComprehensiveValidation {
 
     for (const { name, class: ProcessorClass } of processorTests) {
       console.log(`  🔧 Testing ${name} Processor...`);
-      
+
       const processorResult = {
         name,
         status: 'unknown',
@@ -170,7 +170,7 @@ class ComprehensiveValidation {
       try {
         const processor = new ProcessorClass();
         const files = this.results.overview.byProcessor[name]?.fileList || [];
-        
+
         if (files.length === 0) {
           processorResult.status = 'no_files';
           processorResult.issues.push('No files found for processing');
@@ -178,26 +178,26 @@ class ComprehensiveValidation {
           // Test with first available file
           const testFile = files[0];
           const startTime = Date.now();
-          
+
           const records = await processor.processFile(testFile);
           const processingTime = Date.now() - startTime;
-          
+
           processorResult.status = 'success';
           processorResult.filesProcessed = 1;
           processorResult.recordsGenerated = records.length;
           processorResult.avgProcessingTime = processingTime;
           processorResult.dataTypes = [...new Set(records.map(r => r.dataType))];
           processorResult.sampleRecord = records[0] || null;
-          
+
           // Validate sample record
           if (processorResult.sampleRecord) {
             const validationIssues = this.validateRecord(processorResult.sampleRecord);
             processorResult.issues.push(...validationIssues);
           }
-          
+
           console.log(`    ✅ ${records.length} records in ${processingTime}ms`);
         }
-        
+
       } catch (error) {
         processorResult.status = 'error';
         processorResult.issues.push(error.message);
@@ -224,7 +224,7 @@ class ComprehensiveValidation {
     for (const [name, result] of Object.entries(this.results.processors)) {
       if (result.sampleRecord && result.status === 'success') {
         totalRecords++;
-        
+
         // Test timestamp validation
         if (result.sampleRecord.timestamp && result.sampleRecord.timestamp !== null) {
           if (this.isValidTimestamp(result.sampleRecord.timestamp)) {
@@ -234,20 +234,20 @@ class ComprehensiveValidation {
             quality.issues.push(`${name}: Invalid timestamp format`);
           }
         }
-        
+
         // Test schema compliance
         const requiredFields = ['id', 'timestamp', 'source', 'dataType', 'processed_at'];
-        const hasAllFields = requiredFields.every(field => 
-          result.sampleRecord[field] !== undefined && 
+        const hasAllFields = requiredFields.every(field =>
+          result.sampleRecord[field] !== undefined &&
           result.sampleRecord[field] !== null
         );
-        
+
         if (hasAllFields) {
           quality.schemaCompliance.passed++;
           validRecords++;
         } else {
           quality.schemaCompliance.failed++;
-          const missingFields = requiredFields.filter(field => 
+          const missingFields = requiredFields.filter(field =>
             !result.sampleRecord[field]
           );
           quality.issues.push(`${name}: Missing fields: ${missingFields.join(', ')}`);
@@ -259,13 +259,13 @@ class ComprehensiveValidation {
     const timestampScore = quality.timestampValidation.passed / Math.max(totalRecords, 1);
     const schemaScore = quality.schemaCompliance.passed / Math.max(totalRecords, 1);
     const processingScore = validRecords / Math.max(totalRecords, 1);
-    
+
     quality.overallScore = Math.round(
       (timestampScore * 30 + schemaScore * 40 + processingScore * 30) * 100
     );
 
     this.results.dataQuality = quality;
-    
+
     console.log(`  Quality Score: ${quality.overallScore}/100`);
     console.log(`  Schema Compliance: ${quality.schemaCompliance.passed}/${totalRecords}`);
     console.log(`  Timestamp Validation: ${quality.timestampValidation.passed}/${totalRecords}`);
@@ -274,10 +274,10 @@ class ComprehensiveValidation {
   async generateReport() {
     const duration = Date.now() - this.startTime;
     const { overview, processors, dataQuality } = this.results;
-    
+
     // Generate recommendations
     const recommendations = [];
-    
+
     if (overview.recognitionRate < 50) {
       recommendations.push({
         priority: 'HIGH',
@@ -285,19 +285,19 @@ class ComprehensiveValidation {
         solution: 'Add more file processors or improve file pattern matching'
       });
     }
-    
+
     if (dataQuality.overallScore < 80) {
       recommendations.push({
-        priority: 'HIGH', 
+        priority: 'HIGH',
         issue: 'Data quality below enterprise standard',
         solution: 'Fix schema compliance and timestamp parsing issues'
       });
     }
-    
+
     // Count successful processors
     const successfulProcessors = Object.values(processors).filter(p => p.status === 'success').length;
     const totalProcessors = Object.keys(processors).length;
-    
+
     if (successfulProcessors < totalProcessors) {
       recommendations.push({
         priority: 'MEDIUM',
@@ -319,9 +319,9 @@ class ComprehensiveValidation {
     console.log(`Overall Quality Score: ${dataQuality.overallScore}/100`);
     console.log(`File Recognition: ${overview.recognitionRate}%`);
     console.log(`Processor Success: ${successfulProcessors}/${totalProcessors}`);
-    console.log(`Validation Time: ${(duration/1000).toFixed(2)}s`);
+    console.log(`Validation Time: ${(duration / 1000).toFixed(2)}s`);
     console.log(`\nFull Report: ${reportPath}`);
-    
+
     // Quality assessment
     if (dataQuality.overallScore >= 90) {
       console.log('\n🏆 ENTERPRISE GRADE - Excellent quality, production ready');
@@ -332,11 +332,11 @@ class ComprehensiveValidation {
     } else {
       console.log('\n❌ NOT PRODUCTION READY - Critical issues require resolution');
     }
-    
+
     if (recommendations.length > 0) {
       console.log('\n🔧 RECOMMENDATIONS:');
       recommendations.forEach((rec, i) => {
-        console.log(`${i+1}. [${rec.priority}] ${rec.issue}`);
+        console.log(`${i + 1}. [${rec.priority}] ${rec.issue}`);
         console.log(`   Solution: ${rec.solution}`);
       });
     }
@@ -347,10 +347,10 @@ class ComprehensiveValidation {
   // Helper methods
   async getAvgFileSize(files) {
     if (files.length === 0) return 0;
-    
+
     let totalSize = 0;
     let validFiles = 0;
-    
+
     for (const file of files) {
       try {
         const stats = await fs.stat(file);
@@ -360,19 +360,19 @@ class ComprehensiveValidation {
         // Skip files that can't be accessed
       }
     }
-    
+
     return validFiles > 0 ? Math.round(totalSize / validFiles / 1024) : 0; // KB
   }
 
   validateRecord(record) {
     const issues = [];
-    
+
     if (!record.id) issues.push('Missing ID');
     if (!record.timestamp) issues.push('Missing timestamp');
     if (!record.source) issues.push('Missing source');
     if (!record.dataType) issues.push('Missing dataType');
     if (!record.processed_at) issues.push('Missing processed_at');
-    
+
     return issues;
   }
 
@@ -383,7 +383,7 @@ class ComprehensiveValidation {
 
   generateMarkdownReport() {
     const { overview, processors, dataQuality, recommendations } = this.results;
-    
+
     return `# Enterprise Data Processor Validation Report
 
 **Generated:** ${new Date().toISOString()}  
@@ -399,9 +399,9 @@ class ComprehensiveValidation {
 
 ## File Discovery Results
 
-${Object.entries(overview.byProcessor).map(([name, data]) => 
-  `- **${name}:** ${data.files} files (avg ${data.avgFileSize}KB)`
-).join('\n')}
+${Object.entries(overview.byProcessor).map(([name, data]) =>
+      `- **${name}:** ${data.files} files (avg ${data.avgFileSize}KB)`
+    ).join('\n')}
 
 ## Processor Validation
 
@@ -427,8 +427,8 @@ ${dataQuality.issues.map(issue => `- ${issue}`).join('\n')}
 
 ## Recommendations
 
-${recommendations.length === 0 ? '✅ No major issues found' : 
-recommendations.map(rec => `
+${recommendations.length === 0 ? '✅ No major issues found' :
+        recommendations.map(rec => `
 ### [${rec.priority}] ${rec.issue}
 **Solution:** ${rec.solution}
 `).join('\n')}
@@ -436,12 +436,12 @@ recommendations.map(rec => `
 ## Overall Assessment
 
 ${dataQuality.overallScore >= 90 ? '🏆 **ENTERPRISE GRADE** - Production ready with excellent quality' :
-  dataQuality.overallScore >= 80 ? '✅ **PRODUCTION READY** - Good quality with minor issues' :
-  dataQuality.overallScore >= 70 ? '⚠️ **NEEDS IMPROVEMENT** - Address issues before production' :
-  '❌ **NOT PRODUCTION READY** - Critical issues require resolution'}
+        dataQuality.overallScore >= 80 ? '✅ **PRODUCTION READY** - Good quality with minor issues' :
+          dataQuality.overallScore >= 70 ? '⚠️ **NEEDS IMPROVEMENT** - Address issues before production' :
+            '❌ **NOT PRODUCTION READY** - Critical issues require resolution'}
 
 ---
-*Generated by Faraday Data Processor Enterprise Validation Suite*
+*Generated by M Data Processor Enterprise Validation Suite*
 `;
   }
 }
@@ -449,7 +449,7 @@ ${dataQuality.overallScore >= 90 ? '🏆 **ENTERPRISE GRADE** - Production ready
 // CLI execution
 if (require.main === module) {
   const dataSourcePath = process.argv[2] || '~/Developer/_Data-Source';
-  
+
   const validator = new ComprehensiveValidation(dataSourcePath);
   validator.runValidation()
     .then(results => {

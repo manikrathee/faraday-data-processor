@@ -108,7 +108,7 @@ async function processDataSource(name, processor, getFiles, outputPath, options)
 }
 
 program
-  .name('faraday-data-processor')
+  .name('m-data-processor')
   .description('High-performance data processing pipeline for health and fitness data')
   .version('1.0.0');
 
@@ -127,7 +127,7 @@ program
   .option('--mysql-port <port>', 'MySQL port', '3306')
   .option('--mysql-user <user>', 'MySQL user', 'root')
   .option('--mysql-password <password>', 'MySQL password', '')
-  .option('--mysql-database <database>', 'MySQL database name', 'faraday_health_data')
+  .option('--mysql-database <database>', 'MySQL database name', 'm_health_data')
   .action(async (options) => {
     try {
       // Cross-platform path handling
@@ -138,7 +138,7 @@ program
       sourcePath = path.resolve(sourcePath);
       const outputPath = path.resolve(options.output);
       
-      console.log('🚀 Faraday Data Processor');
+      console.log('🚀 M Data Processor');
       console.log(`Source: ${sourcePath}`);
       console.log(`Output: ${outputPath}`);
       console.log(`Incremental: ${options.incremental}`);
